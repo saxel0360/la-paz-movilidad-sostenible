@@ -44,7 +44,7 @@ cd la-paz-movilidad-sostenible
 
 # Frontend
 
-Entrar al proyecto
+Entrar al proyecto.
 
 ```bash
 cd frontend
