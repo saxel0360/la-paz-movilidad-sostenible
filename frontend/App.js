@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 export default function App() {
   return (
     <View style={styles.container}>
-      <Text>Tlabajen tienen que tlabajal!</Text>
+      <Text>Tlabajen, tlabajen tienen que tlabajal!</Text>
       <StatusBar style="auto" />
     </View>
   );
