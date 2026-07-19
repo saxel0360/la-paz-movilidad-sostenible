@@ -12,7 +12,7 @@ export const TELEFERICO_ROUTES = {
         nombre: 'Línea Morada',
         descripcion: 'El Alto (Av. 6 de Marzo) → Centro (Calle Murillo)',
         operador: 'Mi Teleférico',
-        color: '#9B59B6', // Morado
+        color: '#9B59B6',
         costo: 3.00,
         horario: '06:00 - 23:00',
         frecuencia: '4-6 min',
@@ -49,7 +49,7 @@ export const TELEFERICO_ROUTES = {
         nombre: 'Línea Amarilla',
         descripcion: 'Ciudad Satélite → Curva de Olguin',
         operador: 'Mi Teleférico',
-        color: '#F1C40F', // Amarillo
+        color: '#F1C40F',
         costo: 3.00,
         horario: '06:00 - 23:00',
         frecuencia: '4-6 min',
@@ -86,7 +86,7 @@ export const TELEFERICO_ROUTES = {
         nombre: 'Línea Roja',
         descripcion: 'Estación Central → Obrajes',
         operador: 'Mi Teleférico',
-        color: '#E74C3C', // Rojo
+        color: '#E74C3C',
         costo: 3.00,
         horario: '06:00 - 23:00',
         frecuencia: '4-6 min',
@@ -122,12 +122,7 @@ export const TELEFERICO_ROUTES = {
 };
 
 /**
- * Obtiene la ruta de un teleférico entre dos estaciones
- * @param {string} routeId - ID de la ruta (ej: 'linea_morada')
- * @param {Object} fromStop - { nombre, lat, lng } o coordenadas
- * @param {Object} toStop - { nombre, lat, lng } o coordenadas
- * @param {string} direction - 'forward' o 'backward'
- * @returns {Object|null} Segmento de ruta
+ * Obtiene la ruta de un teleférico entre dos estaciones (VERSIÓN MEJORADA)
  */
 export const getTelefericoSegment = (routeId, fromStop, toStop, direction = 'forward') => {
     const route = TELEFERICO_ROUTES[routeId];
@@ -149,7 +144,6 @@ export const getTelefericoSegment = (routeId, fromStop, toStop, direction = 'for
             );
             if (index !== -1) return index;
             
-            console.warn(`Estación "${stop}" no encontrada en ${routeId}`);
             return -1;
         }
         
@@ -157,17 +151,21 @@ export const getTelefericoSegment = (routeId, fromStop, toStop, direction = 'for
             let index = stops.findIndex(s => s.nombre === stop.nombre);
             if (index !== -1) return index;
             
-            index = stops.findIndex(s => 
-                s.nombre.toLowerCase().includes(stop.nombre.toLowerCase()) ||
-                stop.nombre.toLowerCase().includes(s.nombre.toLowerCase())
-            );
-            if (index !== -1) return index;
+            const words = stop.nombre.toLowerCase().split(' ');
+            for (const word of words) {
+                if (word.length < 3) continue;
+                const idx = stops.findIndex(s => 
+                    s.nombre.toLowerCase().includes(word)
+                );
+                if (idx !== -1) return idx;
+            }
+            return -1;
         }
         
         if (stop.lat && stop.lng) {
             const index = stops.findIndex(s => 
-                Math.abs(s.lat - stop.lat) < 0.001 && 
-                Math.abs(s.lng - stop.lng) < 0.001
+                Math.abs(s.lat - stop.lat) < 0.005 &&
+                Math.abs(s.lng - stop.lng) < 0.005
             );
             if (index !== -1) return index;
         }
@@ -178,11 +176,30 @@ export const getTelefericoSegment = (routeId, fromStop, toStop, direction = 'for
     const fromIndex = findStopIndex(fromStop);
     const toIndex = findStopIndex(toStop);
 
+    // 🔧 SI NO ENCUENTRA LAS ESTACIONES, USAR TODA LA RUTA COMPLETA
     if (fromIndex === -1 || toIndex === -1) {
-        console.warn(`No se encontraron estaciones: from=${fromIndex}, to=${toIndex}`);
-        return null;
+        console.warn(`No se encontraron estaciones. Usando ruta COMPLETA de ${route.nombre}`);
+        console.log(`   Ruta completa tiene ${stops.length} estaciones`);
+        
+        // Usar TODA la ruta (primera a última estación)
+        return getSegmentFromIndices(route, 0, stops.length - 1, direction);
     }
 
+    // Si encuentra las estaciones pero son la misma, usar toda la ruta
+    if (fromIndex === toIndex) {
+        console.warn(`Origen y destino son la misma estación. Usando ruta COMPLETA de ${route.nombre}`);
+        return getSegmentFromIndices(route, 0, stops.length - 1, direction);
+    }
+
+    return getSegmentFromIndices(route, fromIndex, toIndex, direction);
+};
+
+/**
+ * Función auxiliar para obtener segmento desde índices
+ */
+const getSegmentFromIndices = (route, fromIndex, toIndex, direction) => {
+    const stops = route.paradas;
+    
     let start, end;
     if (direction === 'forward' && fromIndex <= toIndex) {
         start = fromIndex;
@@ -201,8 +218,8 @@ export const getTelefericoSegment = (routeId, fromStop, toStop, direction = 'for
         : segmentStops;
 
     const numStops = finalStops.length;
-    const distance = numStops * 0.8; // 800m entre estaciones
-    const duration = numStops * 2; // 2 min por estación
+    const distance = numStops * 0.8;
+    const duration = numStops * 2;
 
     return {
         routeId: route.id,

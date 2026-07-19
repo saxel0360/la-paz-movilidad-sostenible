@@ -27,4 +27,5 @@ export const COLORS = {
     GRAY_500: '#6B7280',
     GRAY_700: '#374151',
     GRAY_900: '#111827',
+    WARNING: '#F59E0B'
 };

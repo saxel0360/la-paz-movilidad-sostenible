@@ -48,7 +48,7 @@ export const TestCaseSelector = ({ onSelect, selectedCase }) => {
                 <Text style={styles.routeArrow}>→</Text>
                 <Text style={styles.routePoint}>📍 {item.destino.nombre}</Text>
             </View>
-            <Text style={styles.testCaseMeta}>🚐 Ruta {item.ruta_minibus.replace('ruta_', '')}</Text>
+            <Text style={styles.testCaseMeta}>🚐 Ruta {item.ruta_minibus ? item.ruta_minibus.replace('ruta_', ''): '' }</Text>
         </TouchableOpacity>
     );
 
@@ -57,9 +57,9 @@ export const TestCaseSelector = ({ onSelect, selectedCase }) => {
             ESTUDIANTE: '#34C759',
             TRABAJADOR: '#007AFF',
             TURISTA: '#AF52DE',
-            TELEFERICO_MORADO: '#9B59B6', // Morado
-            TELEFERICO_AMARILLO: '#F1C40F', // Amarillo
-            COMBINADO: '#E74C3C', // Rojo
+            TELEFERICO_MORADO: '#9B59B6',
+            TELEFERICO_AMARILLO: '#F1C40F',
+            COMBINADO: '#E74C3C',
         };
         return colors[modo] || COLORS.GRAY_500;
     };
