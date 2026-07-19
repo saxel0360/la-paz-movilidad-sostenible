@@ -1,461 +1,743 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-    StyleSheet,
     View,
     Text,
+    StyleSheet,
     TouchableOpacity,
     ScrollView,
-    Dimensions,
-    Platform,
-    Alert,
     ActivityIndicator,
+    Alert,
+    Dimensions,
+    SafeAreaView, Platform,
+    StatusBar,
 } from 'react-native';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
-import { MOCK_RUTA_MULTIMODAL } from '../mocks/mockRuta';
+import { useWalkingRoute, useDrivingRoute } from '../hooks/useOSRM';
 import { SearchBar } from '../components/SearchBar';
-import { useTripSimulation } from '../hooks/useTripSimulation';
-import { geocodingService } from '../../services/geocodingService';
+import { TestCaseSelector } from '../components/TestCaseSelector';
+import { getMinibusSegment, TEST_CASES, findRoutesBetween} from '../../services/minibusRoutes';
 import { COLORS } from '../../constants/colors';
+import { getTelefericoSegment } from '../../services/telefericoRoutes';
+import { TELEFERICO_ROUTES } from '../../services/telefericoRoutes';
 
 const { height, width } = Dimensions.get('window');
 
+// Puntos de referencia en La Paz
+const WAYPOINTS = {
+    'estudiante': [
+        {
+            latitude: -16.5200,
+            longitude: -68.1200,
+            nombre: 'Rotonda Obrajes'
+        },
+    ],
+    'trabajador': [
+        {
+            latitude: -16.5050,
+            longitude: -68.1450,
+            nombre: 'Puente Trillizos'
+        },
+    ],
+    'turista': [
+        {
+            latitude: -16.5080,
+            longitude: -68.1250,
+            nombre: 'Calle 16'
+        },
+    ],
+};
+
 export default function RoutePlannerScreen() {
     const mapRef = useRef(null);
-    const [region, setRegion] = useState({
-        latitude: -16.5000,
-        longitude: -68.1250,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
+    const [origin, setOrigin] = useState({
+        latitude: -16.4958,
+        longitude: -68.1333,
+        nombre: 'Plaza Murillo',
     });
+    const [destination, setDestination] = useState({
+        latitude: -16.5255,
+        longitude: -68.1185,
+        nombre: 'Zona Sur',
+    });
+    const [route, setRoute] = useState(null);
+    const [isCalculating, setIsCalculating] = useState(false);
+    const [selectedTestCase, setSelectedTestCase] = useState(null);
+    const [selectedRouteId, setSelectedRouteId] = useState('ruta_44');
+    const [showRoutes, setShowRoutes] = useState(false);
 
-    // Estado de la ruta y puntos
-    const [ruta, setRuta] = useState(MOCK_RUTA_MULTIMODAL);
-    const [selectedStep, setSelectedStep] = useState(null);
-    const [origin, setOrigin] = useState(MOCK_RUTA_MULTIMODAL.origen);
-    const [destination, setDestination] = useState(MOCK_RUTA_MULTIMODAL.destino);
+    // Estados para los segmentos
+    const [walkRoute1, setWalkRoute1] = useState(null);
+    const [drivingRoute, setDrivingRoute] = useState(null);
+    const [walkRoute2, setWalkRoute2] = useState(null);
+    const [loadingWalk1, setLoadingWalk1] = useState(false);
+    const [loadingDriving, setLoadingDriving] = useState(false);
+    const [loadingWalk2, setLoadingWalk2] = useState(false);
+    const [progress1, setProgress1] = useState(0);
+    const [progress2, setProgress2] = useState(0);
+    const [progress3, setProgress3] = useState(0);
 
-    // Estado de selección
-    const [selectionMode, setSelectionMode] = useState(null); // 'origin' | 'destination'
-    const [isLoading, setIsLoading] = useState(false);
+    // ============================================
+    // SELECCIÓN DE CASO DE PRUEBA
+    // ============================================
+    const handleTestCaseSelect = (testCase) => {
+        if (!testCase) {
+            setSelectedTestCase(null);
+            setRoute(null);
+            return;
+        }
 
-    // Estado de la simulación
-    const [showSimulation, setShowSimulation] = useState(false);
-    const {
-        isActive,
-        isComplete,
-        currentPosition,
-        progress,
-        startSimulation,
-        pauseSimulation,
-        resumeSimulation,
-        stopSimulation,
-    } = useTripSimulation(ruta, 1.2);
+        setSelectedTestCase(testCase);
+        setSelectedRouteId(testCase.ruta_minibus);
 
-    // Ajustar el mapa para mostrar toda la ruta
-    const fitMapToRoute = () => {
-        if (!ruta) return;
+        // Actualizar origen y destino
+        setOrigin({
+            latitude: testCase.origen.lat,
+            longitude: testCase.origen.lng,
+            nombre: testCase.origen.nombre,
+        });
+        setDestination({
+            latitude: testCase.destino.lat,
+            longitude: testCase.destino.lng,
+            nombre: testCase.destino.nombre,
+        });
 
-        const allCoordinates = ruta.tramos.flatMap(tramo => tramo.coordenadas);
-        if (allCoordinates.length > 0 && mapRef.current) {
+        // Obtener waypoints específicos del caso
+        const waypoints = WAYPOINTS[testCase.modo.toLowerCase()] || WAYPOINTS.estudiante;
+
+        // Calcular ruta automáticamente
+        setTimeout(() => {
+            calculateMultimodalRoute(waypoints);
+        }, 300);
+    };
+
+    // ============================================
+    // CÁLCULO DE RUTA MULTIMODAL (VERSIÓN MEJORADA)
+    // ============================================
+    const calculateMultimodalRoute = async (waypoints) => {
+    setIsCalculating(true);
+    setRoute(null);
+    
+    try {
+        // 🔍 Detectar si el caso de prueba incluye teleférico
+        const hasTeleferico = selectedTestCase?.teleferico || false;
+        const telefericoId = selectedTestCase?.teleferico || null;
+        
+        // Obtener nombres de paradas
+        const fromName = origin.nombre || 'Plaza Murillo';
+        const toName = destination.nombre || 'Zona Sur';
+        
+        let routeId = selectedRouteId;
+        if (!routeId) {
+            const availableRoutes = findRoutesBetween(fromName, toName);
+            if (availableRoutes.length > 0) {
+                routeId = availableRoutes[0].routeId;
+            } else {
+                routeId = 'ruta_44';
+            }
+        }
+
+        // ============================================
+        // CASO CON TELEFÉRICO
+        // ============================================
+        if (hasTeleferico && telefericoId) {
+            console.log(`🚠 Calculando ruta con teleférico: ${telefericoId}`);
+            
+            // Obtener segmento de teleférico
+            const telefericoSegment = getTelefericoSegment(
+                telefericoId,
+                { nombre: fromName, lat: origin.latitude, lng: origin.longitude },
+                { nombre: toName, lat: destination.latitude, lng: destination.longitude },
+                'forward'
+            );
+
+            if (telefericoSegment) {
+                console.log(`✅ Teleférico encontrado: ${telefericoSegment.nombre}`);
+                
+                // Simular carga
+                setLoadingWalk1(true);
+                setProgress1(50);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Generar caminata a la estación
+                const walkCoords1 = generateWalkRoute(
+                    { latitude: origin.latitude, longitude: origin.longitude },
+                    { 
+                        latitude: telefericoSegment.coordinates[0].latitude,
+                        longitude: telefericoSegment.coordinates[0].longitude
+                    }
+                );
+                
+                setLoadingWalk1(false);
+                setProgress1(100);
+
+                // Cargar teleférico
+                setLoadingDriving(true);
+                setProgress2(50);
+                await new Promise(resolve => setTimeout(resolve, 800));
+                
+                setDrivingRoute({
+                    coordinates: telefericoSegment.coordinates,
+                    duration: telefericoSegment.duration,
+                    distance: telefericoSegment.distance,
+                    nombre: telefericoSegment.nombre,
+                    color: telefericoSegment.color,
+                    costo: telefericoSegment.costo,
+                    paradas: telefericoSegment.paradas,
+                    tipo: 'TELEFERICO',
+                });
+                setLoadingDriving(false);
+                setProgress2(100);
+
+                // Caminata final
+                setLoadingWalk2(true);
+                setProgress3(50);
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                const lastCoord = telefericoSegment.coordinates[telefericoSegment.coordinates.length - 1];
+                const walkCoords2 = generateWalkRoute(
+                    { 
+                        latitude: lastCoord.latitude,
+                        longitude: lastCoord.longitude
+                    },
+                    { 
+                        latitude: destination.latitude,
+                        longitude: destination.longitude
+                    }
+                );
+                setLoadingWalk2(false);
+                setProgress3(100);
+
+                // Construir ruta multimodal
+                setTimeout(() => {
+                    const multimodalRoute = buildMultimodalRoute({
+                        walkToFirst: {
+                            coordinates: walkCoords1,
+                            duration: 5,
+                            distance: 0.3,
+                        },
+                        drivingSegments: [{
+                            coordinates: telefericoSegment.coordinates,
+                            duration: telefericoSegment.duration,
+                            distance: telefericoSegment.distance,
+                            nombre: telefericoSegment.nombre,
+                            color: telefericoSegment.color,
+                            costo: telefericoSegment.costo,
+                            tipo: 'TELEFERICO',
+                            paradas: telefericoSegment.paradas,
+                        }],
+                        walkToDestination: {
+                            coordinates: walkCoords2,
+                            duration: 3,
+                            distance: 0.2,
+                        },
+                        waypoints: waypoints || [],
+                    });
+                    setRoute(multimodalRoute);
+                    setIsCalculating(false);
+                    setTimeout(() => fitMapToRoute(multimodalRoute), 300);
+                }, 300);
+                return;
+            }
+        }
+
+        // ============================================
+        // CASO CON MINIBÚS (original)
+        // ============================================
+        console.log(`🚐 Calculando ruta con minibús: ${routeId}`);
+        
+        const minibusSegment = getMinibusSegment(
+            routeId,
+            { nombre: fromName, lat: origin.latitude, lng: origin.longitude },
+            { nombre: toName, lat: destination.latitude, lng: destination.longitude },
+            'forward'
+        );
+
+            if (minibusSegment) {
+                console.log(`✅ Minibús encontrado: ${minibusSegment.nombre}`);
+                console.log(`   Paradas: ${minibusSegment.paradas.join(' → ')}`);
+
+                // Simular carga de caminata
+                setLoadingWalk1(true);
+                setProgress1(30);
+                await new Promise(resolve => setTimeout(resolve, 400));
+
+                // Crear ruta de caminata simulada
+                const walkCoords1 = generateWalkRoute(
+                    { latitude: origin.latitude, longitude: origin.longitude },
+                    {
+                        latitude: minibusSegment.coordinates[0].latitude,
+                        longitude: minibusSegment.coordinates[0].longitude
+                    }
+                );
+                setWalkRoute1({
+                    coordinates: walkCoords1,
+                    duration: 5,
+                    distance: 0.3,
+                });
+                setLoadingWalk1(false);
+                setProgress1(100);
+
+                // Simular carga de minibús
+                setLoadingDriving(true);
+                setProgress2(30);
+                await new Promise(resolve => setTimeout(resolve, 600));
+
+                setDrivingRoute({
+                    coordinates: minibusSegment.coordinates,
+                    duration: minibusSegment.duration,
+                    distance: minibusSegment.distance,
+                    nombre: minibusSegment.nombre,
+                    color: minibusSegment.color,
+                    costo: minibusSegment.costo,
+                    paradas: minibusSegment.paradas,
+                });
+                setLoadingDriving(false);
+                setProgress2(100);
+
+                // Simular carga de caminata final
+                setLoadingWalk2(true);
+                setProgress3(30);
+                await new Promise(resolve => setTimeout(resolve, 400));
+
+                const lastCoord = minibusSegment.coordinates[minibusSegment.coordinates.length - 1];
+                const walkCoords2 = generateWalkRoute(
+                    {
+                        latitude: lastCoord.latitude,
+                        longitude: lastCoord.longitude
+                    },
+                    {
+                        latitude: destination.latitude,
+                        longitude: destination.longitude
+                    }
+                );
+                setWalkRoute2({
+                    coordinates: walkCoords2,
+                    duration: 3,
+                    distance: 0.2,
+                });
+                setLoadingWalk2(false);
+                setProgress3(100);
+
+                // Construir ruta multimodal
+                setTimeout(() => {
+                    const multimodalRoute = buildMultimodalRoute({
+                        walkToFirst: walkRoute1 || {
+                            coordinates: walkCoords1,
+                            duration: 5,
+                            distance: 0.3,
+                        },
+                        drivingSegments: [drivingRoute || {
+                            coordinates: minibusSegment.coordinates,
+                            duration: minibusSegment.duration,
+                            distance: minibusSegment.distance,
+                            nombre: minibusSegment.nombre,
+                            color: minibusSegment.color,
+                        }],
+                        walkToDestination: walkRoute2 || {
+                            coordinates: walkCoords2,
+                            duration: 3,
+                            distance: 0.2,
+                        },
+                        waypoints: waypoints || [],
+                    });
+                    setRoute(multimodalRoute);
+                    setIsCalculating(false);
+
+                    // Ajustar mapa
+                    setTimeout(() => fitMapToRoute(multimodalRoute), 300);
+                }, 300);
+            } else {
+                // 🔧 FALLBACK: Si no encuentra ruta de minibús, crear ruta de caminata
+                console.warn('⚠️ No se encontró ruta de minibús, usando caminata');
+                Alert.alert(
+                    'Ruta no encontrada',
+                    'No se encontró una ruta de minibús para este trayecto. Se mostrará una ruta de caminata.',
+                    [{ text: 'OK' }]
+                );
+
+                // Generar ruta de caminata directa
+                const walkCoords = generateWalkRoute(
+                    { latitude: origin.latitude, longitude: origin.longitude },
+                    { latitude: destination.latitude, longitude: destination.longitude },
+                    15
+                );
+
+                const fallbackRoute = {
+                    id: `fallback_${Date.now()}`,
+                    origen: origin,
+                    destino: destination,
+                    tramos: [{
+                        id: 'walk_fallback',
+                        tipo: 'WALK',
+                        nombre: 'Caminata directa',
+                        color: COLORS.WALK,
+                        duracion: 25,
+                        distancia: 2.5,
+                        coordenadas: walkCoords,
+                        instrucciones: `Camina desde ${origin.nombre} hasta ${destination.nombre}`,
+                        esFallback: true,
+                    }],
+                    resumen: {
+                        duracion_total: 25,
+                        distancia_total: 2.5,
+                        transbordos: 0,
+                        costo_estimado: 0,
+                    },
+                };
+                setRoute(fallbackRoute);
+                setIsCalculating(false);
+                setTimeout(() => fitMapToRoute(fallbackRoute), 300);
+            }
+        } catch (error) {
+            console.error('Error calculando ruta:', error);
+            Alert.alert('Error', 'No se pudo calcular la ruta');
+            setIsCalculating(false);
+        }
+    };
+
+    // ============================================
+    // FUNCIONES AUXILIARES
+    // ============================================
+    const generateWalkRoute = (from, to, segments = 8) => {
+        const coords = [];
+        for (let i = 0; i <= segments; i++) {
+            const fraction = i / segments;
+            // Agregar pequeña curvatura para simular calles
+            const offset = Math.sin(fraction * Math.PI) * 0.0003;
+            coords.push({
+                latitude: from.latitude + (to.latitude - from.latitude) * fraction + offset,
+                longitude: from.longitude + (to.longitude - from.longitude) * fraction + offset * 0.5,
+            });
+        }
+        return coords;
+    };
+
+    const buildMultimodalRoute = ({ walkToFirst, drivingSegments, walkToDestination, waypoints }) => {
+        const tramos = [];
+        let totalDuration = 0;
+        let totalDistance = 0;
+
+        // 1. Caminata inicial
+        if (walkToFirst) {
+            tramos.push({
+                id: 'walk_1',
+                tipo: 'WALK',
+                nombre: 'Caminata inicial',
+                color: COLORS.WALK,
+                duracion: Math.round(walkToFirst.duration || 5),
+                distancia: parseFloat((walkToFirst.distance || 0.3).toFixed(2)),
+                coordenadas: walkToFirst.coordinates || [],
+                instrucciones: `Camina desde ${origin.nombre} hasta la parada de minibús`,
+                esFallback: false,
+            });
+            totalDuration += walkToFirst.duration || 5;
+            totalDistance += walkToFirst.distance || 0.3;
+        }
+
+        // 2. Minibús
+        drivingSegments.forEach((segment, index) => {
+            if (segment) {
+                tramos.push({
+                    id: `driving_${index + 1}`,
+                    tipo: 'MINIBUS',
+                    nombre: segment.nombre || `Minibús ${selectedRouteId.replace('ruta_', '')}`,
+                    color: segment.color || COLORS.MINIBUS,
+                    duracion: Math.round(segment.duration || 10),
+                    distancia: parseFloat((segment.distance || 1.5).toFixed(2)),
+                    coordenadas: segment.coordinates || [],
+                    instrucciones: `Toma el minibús hacia ${destination.nombre}`,
+                    esFallback: false,
+                    paradas: segment.paradas || [],
+                    costo: segment.costo || 2.50,
+                });
+                totalDuration += segment.duration || 10;
+                totalDistance += segment.distance || 1.5;
+            }
+        });
+
+        // 3. Caminata final
+        if (walkToDestination) {
+            tramos.push({
+                id: 'walk_2',
+                tipo: 'WALK',
+                nombre: 'Caminata al destino',
+                color: COLORS.WALK,
+                duracion: Math.round(walkToDestination.duration || 3),
+                distancia: parseFloat((walkToDestination.distance || 0.2).toFixed(2)),
+                coordenadas: walkToDestination.coordinates || [],
+                instrucciones: `Camina hasta ${destination.nombre}`,
+                esFallback: false,
+            });
+            totalDuration += walkToDestination.duration || 3;
+            totalDistance += walkToDestination.distance || 0.2;
+        }
+
+        return {
+            id: `multimodal_${Date.now()}`,
+            origen: origin,
+            destino: destination,
+            tramos,
+            resumen: {
+                duracion_total: Math.round(totalDuration),
+                distancia_total: parseFloat(totalDistance.toFixed(2)),
+                transbordos: drivingSegments.length,
+                costo_estimado: parseFloat((totalDistance * 1.5 + (drivingSegments.length * 2.5)).toFixed(2)),
+            },
+        };
+    };
+
+    const fitMapToRoute = (routeData) => {
+        if (!routeData || !mapRef.current) return;
+
+        const allCoordinates = routeData.tramos.flatMap(t => t.coordenadas);
+        if (allCoordinates.length > 0) {
             mapRef.current.fitToCoordinates(allCoordinates, {
-                edgePadding: { top: 80, right: 50, bottom: 250, left: 50 },
+                edgePadding: { top: 100, right: 50, bottom: 300, left: 50 },
                 animated: true,
             });
         }
     };
 
-    // Ajustar automáticamente al cargar
-    useEffect(() => {
-        setTimeout(fitMapToRoute, 500);
-    }, []);
+    // ============================================
+    // RENDER
+    // ============================================
+    const isLoading = loadingWalk1 || loadingDriving || loadingWalk2;
+    const progress = (progress1 + progress2 + progress3) / 3;
 
-    // Manejar selección en el mapa
-    const handleMapPress = async (event) => {
-        if (!selectionMode) return;
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-        const { latitude, longitude } = event.nativeEvent.coordinate;
-        setIsLoading(true);
+            <View style={styles.container}>
+                {/* Mapa */}
+                <MapView
+                    ref={mapRef}
+                    style={StyleSheet.absoluteFillObject}
+                    initialRegion={{
+                        latitude: -16.5000,
+                        longitude: -68.1250,
+                        latitudeDelta: 0.06,
+                        longitudeDelta: 0.06,
+                    }}
+                    showsUserLocation={true}
+                    showsMyLocationButton={true}
+                >
+                    {/* Origen */}
+                    {origin && (
+                        <Marker coordinate={origin}>
+                            <View style={[styles.marker, styles.markerOrigin]}>
+                                <Text style={styles.markerEmoji}>📍</Text>
+                                <Text style={styles.markerLabel}>Origen</Text>
+                            </View>
+                        </Marker>
+                    )}
 
-        try {
-            const placeInfo = await geocodingService.reverseGeocode(latitude, longitude);
+                    {/* Destino */}
+                    {destination && (
+                        <Marker coordinate={destination}>
+                            <View style={[styles.marker, styles.markerDestination]}>
+                                <Text style={styles.markerEmoji}>🏁</Text>
+                                <Text style={styles.markerLabel}>Destino</Text>
+                            </View>
+                        </Marker>
+                    )}
 
-            const newPoint = {
-                latitude,
-                longitude,
-                nombre: placeInfo.nombre.split(',')[0] || 'Ubicación seleccionada',
-                direccion: placeInfo.nombre,
-            };
+                    {/* Ruta Multimodal */}
+                    {route && route.tramos.map((tramo) => (
+                        <Polyline
+                            key={tramo.id}
+                            coordinates={tramo.coordenadas}
+                            strokeWidth={5}
+                            strokeColor={tramo.color}
+                            lineDashPattern={tramo.tipo === 'WALK' ? [5, 5] : undefined}
+                        />
+                    ))}
+                </MapView>
 
-            if (selectionMode === 'origin') {
-                setOrigin(newPoint);
-                // Actualizar la ruta con el nuevo origen (en MVP usamos mock)
-                // En producción, aquí se llamaría al API
-                Alert.alert('Origen seleccionado', `📍 ${newPoint.nombre}`);
-            } else if (selectionMode === 'destination') {
-                setDestination(newPoint);
-                Alert.alert('Destino seleccionado', `📍 ${newPoint.nombre}`);
-            }
+                {/* Controles superiores */}
+                <View style={styles.topControls}>
+                    <TestCaseSelector
+                        onSelect={handleTestCaseSelect}
+                        selectedCase={selectedTestCase}
+                    />
 
-            setSelectionMode(null);
-        } catch (error) {
-            Alert.alert('Error', 'No se pudo obtener la ubicación');
-        } finally {
-            setIsLoading(false);
-        }
-    };
+                    <View style={styles.searchContainer}>
+                        <SearchBar
+                            placeholder="Origen..."
+                            icon="📍"
+                            value={origin?.nombre || ''}
+                            onPlaceSelect={(place) => {
+                                setOrigin({
+                                    latitude: place.latitud || place.latitude,
+                                    longitude: place.longitud || place.longitude,
+                                    nombre: place.nombre,
+                                });
+                            }}
+                        />
+                    </View>
 
-    // Manejar selección desde búsqueda
-    const handlePlaceSelect = (place, type) => {
-        const point = {
-            latitude: place.latitud,
-            longitude: place.longitud,
-            nombre: place.nombre.split(',')[0],
-            direccion: place.nombre,
-        };
-
-        if (type === 'origin') {
-            setOrigin(point);
-            Alert.alert('Origen seleccionado', `📍 ${point.nombre}`);
-        } else {
-            setDestination(point);
-            Alert.alert('Destino seleccionado', `📍 ${point.nombre}`);
-        }
-
-        setSelectionMode(null);
-    };
-
-    // Obtener ícono según el tipo de transporte
-    const getTransportIcon = (tipo) => {
-        const icons = {
-            WALK: '🚶',
-            TELEFERICO: '🚠',
-            PUMKATARI: '🚌',
-            MINIBUS: '🚐',
-            TRUFI: '🚙',
-            MICRO: '🚌',
-        };
-        return icons[tipo] || '🚗';
-    };
-
-    // Formatear duración
-    const formatDuration = (minutes) => {
-        if (minutes < 60) return `${minutes} min`;
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        return `${hours}h ${mins}min`;
-    };
-
-    // Renderizar controles de simulación
-    const renderSimulationControls = () => {
-        if (!showSimulation) return null;
-
-        return (
-            <View style={styles.simulationControls}>
-                <View style={styles.progressContainer}>
-                    <View style={[styles.progressBar, { width: `${progress}%` }]} />
-                    <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+                    <View style={styles.searchContainer}>
+                        <SearchBar
+                            placeholder="Destino..."
+                            icon="🏁"
+                            value={destination?.nombre || ''}
+                            onPlaceSelect={(place) => {
+                                setDestination({
+                                    latitude: place.latitud || place.latitude,
+                                    longitude: place.longitud || place.longitude,
+                                    nombre: place.nombre,
+                                });
+                            }}
+                        />
+                    </View>
                 </View>
-                <View style={styles.controlsRow}>
-                    {!isActive && !isComplete && (
+
+                {/* Panel inferior */}
+                <View style={styles.bottomPanel}>
+                    {isLoading && (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+                            <Text style={styles.loadingText}>
+                                Calculando ruta... {Math.round(progress)}%
+                            </Text>
+                            <View style={styles.progressBar}>
+                                <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                            </View>
+                            <Text style={styles.loadingSubtext}>
+                                {loadingWalk1 && '🚶 Calculando caminata...'}
+                                {!loadingWalk1 && loadingDriving && '🚐 Buscando minibús...'}
+                                {!loadingWalk1 && !loadingDriving && loadingWalk2 && '🚶 Calculando caminata final...'}
+                            </Text>
+                        </View>
+                    )}
+
+                    {!isLoading && !route && (
                         <TouchableOpacity
-                            style={[styles.controlButton, styles.startButton]}
-                            onPress={startSimulation}
+                            style={styles.calculateButton}
+                            onPress={() => {
+                                const waypoints = WAYPOINTS.estudiante;
+                                calculateMultimodalRoute(waypoints);
+                            }}
                         >
-                            <Text style={styles.controlButtonText}>▶ Iniciar</Text>
+                            <Text style={styles.calculateButtonText}>
+                                🗺️ Calcular Ruta Multimodal
+                            </Text>
                         </TouchableOpacity>
                     )}
-                    {isActive && (
+
+                    {route && !isLoading && (
                         <>
-                            <TouchableOpacity
-                                style={[styles.controlButton, styles.pauseButton]}
-                                onPress={pauseSimulation}
+                            <View style={styles.routeSummary}>
+                                <View style={styles.routeHeader}>
+                                    <Text style={styles.routeTitle}>🚐 Ruta Multimodal</Text>
+                                    {selectedTestCase && (
+                                        <View style={styles.testCaseBadge}>
+                                            <Text style={styles.testCaseBadgeText}>
+                                                {selectedTestCase.modo}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+                                <View style={styles.routeStats}>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statIcon}>🕐</Text>
+                                        <Text style={styles.statText}>{route.resumen.duracion_total} min</Text>
+                                    </View>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statIcon}>📏</Text>
+                                        <Text style={styles.statText}>{route.resumen.distancia_total} km</Text>
+                                    </View>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statIcon}>🔄</Text>
+                                        <Text style={styles.statText}>{route.resumen.transbordos} transbordos</Text>
+                                    </View>
+                                    <View style={styles.statItem}>
+                                        <Text style={styles.statIcon}>💰</Text>
+                                        <Text style={styles.statText}>Bs {route.resumen.costo_estimado}</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            <ScrollView
+                                style={styles.stepsContainer}
+                                showsVerticalScrollIndicator={false}
                             >
-                                <Text style={styles.controlButtonText}>⏸ Pausar</Text>
-                            </TouchableOpacity>
+                                {route.tramos.map((tramo, index) => (
+                                    <View key={tramo.id} style={styles.stepItem}>
+                                        <View style={styles.stepNumber}>
+                                            <Text style={styles.stepNumberText}>{index + 1}</Text>
+                                        </View>
+                                        <View style={[styles.stepBadge, { backgroundColor: tramo.color }]}>
+                                            <Text style={styles.stepBadgeText}>
+                                                {tramo.tipo === 'WALK' ? '🚶' : '🚐'}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.stepContent}>
+                                            <Text style={styles.stepTitle}>{tramo.nombre}</Text>
+                                            <Text style={styles.stepInstruction} numberOfLines={1}>
+                                                {tramo.instrucciones}
+                                            </Text>
+                                            <View style={styles.stepMeta}>
+                                                <Text style={styles.stepMetaText}>
+                                                    ⏱️ {tramo.duracion} min
+                                                </Text>
+                                                <Text style={styles.stepMetaText}>
+                                                    📏 {tramo.distancia} km
+                                                </Text>
+                                                {tramo.costo && (
+                                                    <Text style={styles.stepMetaText}>
+                                                        💰 Bs {tramo.costo}
+                                                    </Text>
+                                                )}
+                                            </View>
+                                            {tramo.paradas && tramo.paradas.length > 0 && (
+                                                <Text style={styles.stepParadas}>
+                                                    🚏 {tramo.paradas.join(' → ')}
+                                                </Text>
+                                            )}
+                                        </View>
+                                    </View>
+                                ))}
+                            </ScrollView>
+
                             <TouchableOpacity
-                                style={[styles.controlButton, styles.stopButton]}
-                                onPress={stopSimulation}
+                                style={styles.startButton}
+                                onPress={() => {
+                                    Alert.alert(
+                                        '🚀 ¡Viaje iniciado!',
+                                        `Siguiendo ruta desde ${origin.nombre} hasta ${destination.nombre}\n\n` +
+                                        `Duración estimada: ${route.resumen.duracion_total} minutos\n` +
+                                        `Costo estimado: Bs ${route.resumen.costo_estimado}`
+                                    );
+                                }}
                             >
-                                <Text style={styles.controlButtonText}>⏹ Detener</Text>
+                                <Text style={styles.startButtonText}>
+                                    🚀 Iniciar Recorrido
+                                </Text>
                             </TouchableOpacity>
                         </>
                     )}
-                    {!isActive && !isComplete && progress > 0 && (
-                        <TouchableOpacity
-                            style={[styles.controlButton, styles.resumeButton]}
-                            onPress={resumeSimulation}
-                        >
-                            <Text style={styles.controlButtonText}>▶ Reanudar</Text>
-                        </TouchableOpacity>
-                    )}
-                    {isComplete && (
-                        <TouchableOpacity
-                            style={[styles.controlButton, styles.completeButton]}
-                            onPress={stopSimulation}
-                        >
-                            <Text style={styles.controlButtonText}>✅ Viaje completado</Text>
-                        </TouchableOpacity>
-                    )}
                 </View>
             </View>
-        );
-    };
-
-    return (
-        <View style={styles.container}>
-            {/* 1. MAPA INTERACTIVO */}
-            <MapView
-                ref={mapRef}
-                provider={PROVIDER_DEFAULT}
-                style={StyleSheet.absoluteFillObject}
-                initialRegion={region}
-                showsUserLocation={true}
-                showsMyLocationButton={true}
-                onPress={handleMapPress}
-                onMapReady={() => console.log('Mapa listo')}
-            >
-                {/* Marcador de Origen */}
-                {origin && (
-                    <Marker
-                        coordinate={origin}
-                        title="Origen"
-                        description={origin.nombre}
-                        pinColor={COLORS.SUCCESS}
-                    >
-                        <View style={styles.markerOrigin}>
-                            <Text style={styles.markerText}>📍</Text>
-                        </View>
-                    </Marker>
-                )}
-
-                {/* Marcador de Destino */}
-                {destination && (
-                    <Marker
-                        coordinate={destination}
-                        title="Destino"
-                        description={destination.nombre}
-                        pinColor={COLORS.ERROR}
-                    >
-                        <View style={styles.markerDestination}>
-                            <Text style={styles.markerText}>🏁</Text>
-                        </View>
-                    </Marker>
-                )}
-
-                {/* Marcador de seguimiento */}
-                {showSimulation && currentPosition && (
-                    <Marker coordinate={currentPosition}>
-                        <View style={styles.markerCurrent}>
-                            <View style={styles.markerPulse} />
-                            <Text style={styles.markerCurrentText}>🚗</Text>
-                        </View>
-                    </Marker>
-                )}
-
-                {/* Líneas de la ruta */}
-                {ruta.tramos.map((tramo) => (
-                    <Polyline
-                        key={tramo.id}
-                        coordinates={tramo.coordenadas}
-                        strokeWidth={5}
-                        strokeColor={tramo.color}
-                        lineDashPattern={tramo.tipo === 'WALK' ? [5, 5] : undefined}
-                    />
-                ))}
-            </MapView>
-
-            {/* 2. BÚSQUEDA Y CONTROLES SUPERIORES */}
-            <View style={styles.topControls}>
-                <View style={styles.searchContainer}>
-                    <SearchBar
-                        placeholder="Seleccionar origen..."
-                        icon="📍"
-                        onPlaceSelect={(place) => handlePlaceSelect(place, 'origin')}
-                    />
-                </View>
-                <View style={styles.searchContainer}>
-                    <SearchBar
-                        placeholder="Seleccionar destino..."
-                        icon="🏁"
-                        onPlaceSelect={(place) => handlePlaceSelect(place, 'destination')}
-                    />
-                </View>
-
-                <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                        style={[styles.actionButton, selectionMode === 'origin' && styles.actionButtonActive]}
-                        onPress={() => setSelectionMode('origin')}
-                    >
-                        <Text style={styles.actionButtonText}>📍 Origen</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.actionButton, selectionMode === 'destination' && styles.actionButtonActive]}
-                        onPress={() => setSelectionMode('destination')}
-                    >
-                        <Text style={styles.actionButtonText}>🏁 Destino</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.actionButton, styles.fitButton]}
-                        onPress={fitMapToRoute}
-                    >
-                        <Text style={styles.actionButtonText}>🗺️ Ver ruta</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-
-            {/* 3. PANEL INFERIOR */}
-            <View style={styles.detailsCard}>
-                {/* Cabecera con controles de simulación */}
-                <View style={styles.cardHeader}>
-                    <View>
-                        <Text style={styles.cardTitle}>Ruta multimodal</Text>
-                        <View style={styles.routeSummary}>
-                            <Text style={styles.summaryText}>
-                                {formatDuration(ruta.resumen.duracion_total)} • {ruta.resumen.distancia_total} km
-                            </Text>
-                            <Text style={styles.summaryText}>
-                                • {ruta.resumen.transbordos} transbordos
-                            </Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity
-                        style={[styles.simulateButton, showSimulation && styles.simulateButtonActive]}
-                        onPress={() => {
-                            setShowSimulation(!showSimulation);
-                            if (!showSimulation) {
-                                stopSimulation();
-                            }
-                        }}
-                    >
-                        <Text style={styles.simulateButtonText}>
-                            {showSimulation ? '🔄 Ocultar' : '🎮 Simular'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Controles de simulación */}
-                {renderSimulationControls()}
-
-                {/* Lista de pasos */}
-                <ScrollView
-                    style={styles.stepsContainer}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {ruta.tramos.map((tramo, index) => (
-                        <TouchableOpacity
-                            key={tramo.id}
-                            style={[
-                                styles.stepItem,
-                                selectedStep === tramo.id && styles.stepItemSelected,
-                            ]}
-                            onPress={() => setSelectedStep(tramo.id)}
-                            activeOpacity={0.7}
-                        >
-                            <View style={[styles.stepNumber, { backgroundColor: tramo.color }]}>
-                                <Text style={styles.stepNumberText}>{index + 1}</Text>
-                            </View>
-                            <View style={styles.stepContent}>
-                                <View style={styles.stepHeader}>
-                                    <Text style={styles.stepType}>
-                                        {getTransportIcon(tramo.tipo)} {tramo.tipo}
-                                    </Text>
-                                    <Text style={styles.stepDuration}>{formatDuration(tramo.duracion)}</Text>
-                                </View>
-                                <Text style={styles.stepLine}>{tramo.nombre_linea}</Text>
-                                <Text style={styles.stepInstruction}>{tramo.instrucciones}</Text>
-                                <Text style={styles.stepDistance}>{tramo.distancia} km</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-
-                {/* Botón de acción */}
-                <TouchableOpacity
-                    style={styles.startButton}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                        if (!showSimulation) {
-                            setShowSimulation(true);
-                        }
-                        startSimulation();
-                    }}
-                >
-                    <Text style={styles.startButtonText}>Iniciar Recorrido 🚀</Text>
-                </TouchableOpacity>
-            </View>
-
-            {/* Loading overlay */}
-            {isLoading && (
-                <View style={styles.loadingOverlay}>
-                    <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-                    <Text style={styles.loadingText}>Obteniendo ubicación...</Text>
-                </View>
-            )}
-        </View>
+        </SafeAreaView>
     );
 }
 
+// ============================================
+// ESTILOS COMPLETOS Y MEJORADOS
+// ============================================
 const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: COLORS.WHITE,
+    },
     container: {
         flex: 1,
         backgroundColor: '#F5F5F5',
     },
-    // Estilos para marcadores
-    markerOrigin: {
-        backgroundColor: COLORS.SUCCESS,
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFFFFF',
-    },
-    markerDestination: {
-        backgroundColor: COLORS.ERROR,
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFFFFF',
-    },
-    markerCurrent: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: COLORS.PRIMARY,
-        justifyContent: 'center',
-        alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#FFFFFF',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 5,
-    },
-    markerPulse: {
-        position: 'absolute',
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: COLORS.PRIMARY + '30',
-        borderWidth: 2,
-        borderColor: COLORS.PRIMARY + '50',
-    },
-    markerText: {
-        fontSize: 18,
-    },
-    markerCurrentText: {
-        fontSize: 22,
-    },
-
-    // Controles superiores
     topControls: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 50 : 20,
+        top: 10,
         left: 16,
         right: 16,
         zIndex: 10,
@@ -463,250 +745,221 @@ const styles = StyleSheet.create({
     searchContainer: {
         marginBottom: 6,
     },
-    actionButtons: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 4,
-    },
-    actionButton: {
-        backgroundColor: COLORS.WHITE,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        elevation: 3,
-        flex: 1,
-        marginHorizontal: 3,
+    // Marcadores
+    marker: {
         alignItems: 'center',
+        justifyContent: 'center',
+        padding: 4,
     },
-    actionButtonActive: {
-        backgroundColor: COLORS.PRIMARY,
+    markerOrigin: {
+        backgroundColor: COLORS.SUCCESS + '30',
+        borderRadius: 20,
+        padding: 6,
+        borderWidth: 2,
+        borderColor: COLORS.SUCCESS,
     },
-    actionButtonText: {
-        fontSize: 12,
-        fontWeight: '500',
+    markerDestination: {
+        backgroundColor: COLORS.ERROR + '30',
+        borderRadius: 20,
+        padding: 6,
+        borderWidth: 2,
+        borderColor: COLORS.ERROR,
+    },
+    markerEmoji: {
+        fontSize: 24,
+    },
+    markerLabel: {
+        fontSize: 10,
+        fontWeight: '600',
         color: COLORS.GRAY_700,
+        marginTop: 2,
     },
-    fitButton: {
-        backgroundColor: COLORS.PRIMARY + '20',
-    },
-
     // Panel inferior
-    detailsCard: {
+    bottomPanel: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: height * 0.55,
         backgroundColor: COLORS.WHITE,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
         paddingHorizontal: 16,
         paddingTop: 16,
-        paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+        paddingBottom: Platform.OS === 'ios' ? 20 : 12,
+        maxHeight: height * 0.58,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.1,
-        shadowRadius: 4.65,
-        elevation: 8,
+        shadowRadius: 8,
+        elevation: 10,
     },
-    cardHeader: {
+    // Loading
+    loadingContainer: {
+        alignItems: 'center',
+        paddingVertical: 24,
+    },
+    loadingText: {
+        marginTop: 12,
+        fontSize: 16,
+        fontWeight: '600',
+        color: COLORS.GRAY_700,
+    },
+    loadingSubtext: {
+        marginTop: 4,
+        fontSize: 13,
+        color: COLORS.GRAY_500,
+    },
+    progressBar: {
+        width: '80%',
+        height: 8,
+        backgroundColor: COLORS.GRAY_200,
+        borderRadius: 4,
+        marginTop: 12,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: COLORS.PRIMARY,
+        borderRadius: 4,
+    },
+    // Botón calcular
+    calculateButton: {
+        backgroundColor: COLORS.PRIMARY,
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+        marginVertical: 8,
+    },
+    calculateButtonText: {
+        color: COLORS.WHITE,
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    // Resumen de ruta
+    routeSummary: {
+        marginBottom: 8,
+    },
+    routeHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 8,
-        paddingBottom: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: COLORS.GRAY_200,
+        marginBottom: 6,
     },
-    cardTitle: {
+    routeTitle: {
         fontSize: 18,
         fontWeight: 'bold',
         color: COLORS.GRAY_900,
     },
-    routeSummary: {
-        flexDirection: 'row',
-        marginTop: 2,
-        flexWrap: 'wrap',
-    },
-    summaryText: {
-        fontSize: 12,
-        color: COLORS.GRAY_500,
-        marginRight: 8,
-    },
-    simulateButton: {
-        backgroundColor: COLORS.GRAY_200,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-    },
-    simulateButtonActive: {
+    testCaseBadge: {
         backgroundColor: COLORS.PRIMARY + '20',
-    },
-    simulateButtonText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: COLORS.GRAY_700,
-    },
-
-    // Controles de simulación
-    simulationControls: {
-        backgroundColor: COLORS.GRAY_100,
+        paddingHorizontal: 10,
+        paddingVertical: 3,
         borderRadius: 12,
-        padding: 8,
-        marginBottom: 8,
     },
-    progressContainer: {
-        height: 8,
-        backgroundColor: COLORS.GRAY_300,
-        borderRadius: 4,
-        marginBottom: 6,
-        position: 'relative',
-    },
-    progressBar: {
-        height: 8,
-        backgroundColor: COLORS.PRIMARY,
-        borderRadius: 4,
-    },
-    progressText: {
-        position: 'absolute',
-        right: 0,
-        top: -16,
+    testCaseBadgeText: {
         fontSize: 11,
-        color: COLORS.GRAY_500,
         fontWeight: '600',
+        color: COLORS.PRIMARY,
     },
-    controlsRow: {
+    routeStats: {
         flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 8,
+        flexWrap: 'wrap',
+        gap: 6,
     },
-    controlButton: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 8,
-        minWidth: 70,
+    statItem: {
+        flexDirection: 'row',
         alignItems: 'center',
+        backgroundColor: COLORS.GRAY_100,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 8,
+        marginRight: 4,
     },
-    controlButtonText: {
+    statIcon: {
         fontSize: 13,
-        fontWeight: '600',
-        color: COLORS.WHITE,
+        marginRight: 4,
     },
-    startButton: {
-        backgroundColor: COLORS.SUCCESS,
+    statText: {
+        fontSize: 12,
+        color: COLORS.GRAY_700,
+        fontWeight: '500',
     },
-    pauseButton: {
-        backgroundColor: COLORS.WARNING,
-    },
-    stopButton: {
-        backgroundColor: COLORS.ERROR,
-    },
-    resumeButton: {
-        backgroundColor: COLORS.PRIMARY,
-    },
-    completeButton: {
-        backgroundColor: COLORS.SUCCESS,
-    },
-
-    // Steps
+    // Pasos
     stepsContainer: {
-        flex: 1,
+        maxHeight: 160,
         marginBottom: 6,
     },
     stepItem: {
         flexDirection: 'row',
+        alignItems: 'center',
         paddingVertical: 8,
-        paddingHorizontal: 10,
-        borderRadius: 10,
-        marginBottom: 4,
-        backgroundColor: COLORS.GRAY_100,
-    },
-    stepItemSelected: {
-        backgroundColor: COLORS.GRAY_200,
-        borderWidth: 1,
-        borderColor: COLORS.PRIMARY,
+        paddingHorizontal: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.GRAY_100,
     },
     stepNumber: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        backgroundColor: COLORS.GRAY_200,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 8,
+    },
+    stepNumberText: {
+        fontSize: 10,
+        fontWeight: 'bold',
+        color: COLORS.GRAY_700,
+    },
+    stepBadge: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         justifyContent: 'center',
         alignItems: 'center',
         marginRight: 10,
-        marginTop: 2,
     },
-    stepNumberText: {
-        color: COLORS.WHITE,
-        fontWeight: 'bold',
-        fontSize: 11,
+    stepBadgeText: {
+        fontSize: 16,
     },
     stepContent: {
         flex: 1,
     },
-    stepHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 1,
-    },
-    stepType: {
-        fontWeight: '600',
+    stepTitle: {
         fontSize: 13,
-        color: COLORS.GRAY_700,
-    },
-    stepDuration: {
-        fontSize: 11,
-        color: COLORS.GRAY_500,
-    },
-    stepLine: {
-        fontSize: 12,
-        fontWeight: '500',
+        fontWeight: '600',
         color: COLORS.GRAY_900,
-        marginBottom: 1,
     },
     stepInstruction: {
-        fontSize: 11,
-        color: COLORS.GRAY_500,
-        marginBottom: 1,
+        fontSize: 12,
+        color: COLORS.GRAY_600,
+        marginTop: 1,
     },
-    stepDistance: {
+    stepMeta: {
+        flexDirection: 'row',
+        marginTop: 2,
+        gap: 8,
+    },
+    stepMetaText: {
         fontSize: 10,
-        color: COLORS.GRAY_300,
+        color: COLORS.GRAY_500,
     },
-
-    // Botón principal
+    stepParadas: {
+        fontSize: 10,
+        color: COLORS.GRAY_400,
+        marginTop: 2,
+    },
+    // Botón inicio
     startButton: {
-        backgroundColor: COLORS.PRIMARY,
-        paddingVertical: 12,
+        backgroundColor: COLORS.SUCCESS,
+        paddingVertical: 14,
         borderRadius: 12,
         alignItems: 'center',
-        marginTop: 2,
+        marginTop: 4,
     },
     startButtonText: {
         color: COLORS.WHITE,
         fontSize: 16,
         fontWeight: 'bold',
-    },
-
-    // Loading
-    loadingOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 1000,
-    },
-    loadingText: {
-        color: COLORS.WHITE,
-        marginTop: 12,
-        fontSize: 16,
     },
 });
