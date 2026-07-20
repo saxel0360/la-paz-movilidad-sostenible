@@ -1,0 +1,63 @@
+import React from "react";
+
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
+import SplashScreen from "../screens/SplashScreen";
+import HomeScreen from "../screens/HomeScreen";
+import ComingSoonScreen from "../screens/ComingSoonScreen";
+import TransportModesScreen from "../screens/TransportModesScreen";
+
+import RoutePlannerScreen from "../ruteo/screens/RoutePlannerScreen";
+
+
+const Stack = createNativeStackNavigator();
+
+
+export default function AppNavigator(){
+
+  return(
+
+    <NavigationContainer>
+
+      <Stack.Navigator
+        initialRouteName="Splash"
+        screenOptions={{
+          headerShown:false
+        }}
+      >
+
+        <Stack.Screen
+          name="Splash"
+          component={SplashScreen}
+        />
+
+
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
+        />
+
+
+        <Stack.Screen
+          name="RoutePlanner"
+          component={RoutePlannerScreen}
+        />
+
+        <Stack.Screen
+          name="ComingSoon"
+          component={ComingSoonScreen}
+        />
+
+        <Stack.Screen
+          name="TransportModes"
+          component={TransportModesScreen}
+        />
+
+      </Stack.Navigator>
+
+    </NavigationContainer>
+
+  );
+
+}
