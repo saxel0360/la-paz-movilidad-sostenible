@@ -10,28 +10,26 @@ import { COLORS } from '../../constants/colors';
 import { SearchBar } from './SearchBar';
 import React, { useState } from "react";
 
-
-
-export default function RouteSearchCard() {
+export default function RouteSearchCard({ onSearch }) {
     const [origin, setOrigin] = useState("");
     const [destination, setDestination] = useState("");
 
     const handleDestination = (place) => {
         console.log('Destino:', place);
+
+        const shortName =
+            place.direccion?.square ||
+            place.direccion?.suburb ||
+            place.direccion?.neighbourhood ||
+            place.nombre.split(",")[0];
+
+        setDestination(shortName);
     };
 
 
     const handleLocation = () => {
         console.log('Obtener ubicación actual');
     };
-
-
-    const swapLocations = () => {
-        const temp = origin;
-        setOrigin(destination);
-        setDestination(temp);
-    };
-
 
     return (
 
@@ -51,32 +49,45 @@ export default function RouteSearchCard() {
             {/* DESTINO */}
 
             <View style={styles.destination}>
-
                 <SearchBar
                     placeholder="¿A dónde quieres ir?"
                     onPlaceSelect={handleDestination}
                 />
-
             </View>
-
-
 
             {/* UBICACION ACTUAL */}
 
-            <TouchableOpacity
-                style={styles.currentButton}
-                onPress={handleLocation}
-            >
+            <View style={styles.actions}>
 
-                <Text style={styles.currentIcon}>
-                    ◎
-                </Text>
+                <TouchableOpacity
+                    style={styles.locationButton}
+                    onPress={handleLocation}
+                >
+                    <Text style={styles.locationIcon}>◎</Text>
+                    <Text style={styles.locationText}>
+                        Mi ubicación
+                    </Text>
+                </TouchableOpacity>
 
-                <Text style={styles.currentText}>
-                    Usar mi ubicación actual
-                </Text>
+                <TouchableOpacity
+                    style={styles.searchButton}
+                    onPress={() => {
+                        console.log("Botón buscar presionado");
+                        console.log("Destino actual:", destination);
 
-            </TouchableOpacity>
+                        if (destination.trim()) {
+                            onSearch(destination);
+                        } else {
+                            console.log("Destino vacío");
+                        }
+                    }}
+                >
+                    <Text style={styles.searchButtonText}>
+                        Buscar ruta
+                    </Text>
+                </TouchableOpacity>
+
+            </View>
 
 
         </View>
@@ -142,36 +153,6 @@ const styles = StyleSheet.create({
         color:COLORS.TEXT_PRIMARY,
     },
 
-
-    swapButton:{
-
-        position:'absolute',
-
-        right:25,
-        top:55,
-
-        width:42,
-        height:42,
-
-        borderRadius:21,
-
-        backgroundColor:COLORS.ANDEAN_BLUE,
-
-        justifyContent:'center',
-        alignItems:'center',
-
-        zIndex:10,
-
-    },
-
-
-    swapIcon:{
-        color:COLORS.WHITE,
-        fontSize:22,
-        fontWeight:'bold',
-    },
-
-
     destination:{
         marginTop:10,
     },
@@ -204,6 +185,53 @@ const styles = StyleSheet.create({
     currentText:{
         color:COLORS.ANDEAN_GREEN,
         fontWeight:'600',
+    },
+
+    actions: {
+        flexDirection: 'row',
+        marginTop: 18,
+        gap: 10,
+    },
+
+    locationButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+
+        backgroundColor: COLORS.ANDEAN_GREEN_LIGHT,
+
+        paddingVertical: 14,
+        borderRadius: 14,
+    },
+
+    locationIcon: {
+        color: COLORS.ANDEAN_GREEN,
+        fontSize: 18,
+        marginRight: 8,
+    },
+
+    locationText: {
+        color: COLORS.ANDEAN_GREEN,
+        fontWeight: '600',
+    },
+
+    searchButton: {
+        flex: 1,
+
+        backgroundColor: COLORS.ANDEAN_BLUE,
+
+        justifyContent: 'center',
+        alignItems: 'center',
+
+        paddingVertical: 14,
+        borderRadius: 14,
+    },
+
+    searchButtonText: {
+        color: COLORS.WHITE,
+        fontWeight: '700',
+        fontSize: 16,
     },
 
 

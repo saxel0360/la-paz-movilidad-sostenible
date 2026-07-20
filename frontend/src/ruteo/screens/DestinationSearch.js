@@ -7,8 +7,7 @@ import QuickAccess from '../components/QuickAccess';
 import RecentTrips from '../components/RecentTrips';
 import RouteSearchCard from '../components/RouteSearchCard';
 
-export default function DestinationSearch({ goToRoute }) {
-
+export default function DestinationSearch({ navigation }) {
     const handleDestination = (place) => {
         console.log(place);
     };
@@ -29,7 +28,13 @@ export default function DestinationSearch({ goToRoute }) {
 
             {/* TARJETA DE BÚSQUEDA */}
             <View style={styles.searchCard}>
-                <RouteSearchCard />
+                <RouteSearchCard
+                    onSearch={(destination) =>
+                        navigation.navigate("RouteResults", {
+                            destination,
+                        })
+                    }
+                />
             </View>
 
             {/* ACCESOS RÁPIDOS */}
@@ -48,7 +53,7 @@ export default function DestinationSearch({ goToRoute }) {
                 </Text>
 
                 <RecentTrips
-                    goToRoute={goToRoute}
+                    navigation={navigation}
                 />
             </View>
 
@@ -60,7 +65,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: COLORS.BACKGROUND,
-        paddingHorizontal: 20,
+        padding: 22,
     },
 
     header: {

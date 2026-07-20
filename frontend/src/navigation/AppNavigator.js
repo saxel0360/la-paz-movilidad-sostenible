@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import WelcomeScreen from "../ruteo/screens/WelcomeScreen";
 import RoutePlannerScreen from "../ruteo/screens/RoutePlannerScreen";
 import DestinationSearch from "../ruteo/screens/DestinationSearch";
+import RouteResultsScreen from "../ruteo/screens/RouteResultsScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -29,6 +30,11 @@ export default function AppNavigator() {
         <Stack.Screen
           name="RoutePlanner"
           component={RoutePlannerScreen}
+        />
+
+        <Stack.Screen
+            name="RouteResults"
+            component={RouteResultsScreen}
         />
       </Stack.Navigator>
     </NavigationContainer>

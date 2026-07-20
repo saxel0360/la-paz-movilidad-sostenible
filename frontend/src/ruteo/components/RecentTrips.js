@@ -6,11 +6,13 @@ import {
     FlatList,
     StyleSheet,
 } from 'react-native';
-
+import { useNavigation } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import { TEST_CASES } from '../../services/minibusRoutes';
 
-export default function RecentTrips({ goToRoute }) {
+export default function RecentTrips() {
+
+    const navigation = useNavigation();
 
     const recentTrips = Object.entries(TEST_CASES)
         .map(([key, item]) => ({
@@ -18,12 +20,15 @@ export default function RecentTrips({ goToRoute }) {
             ...item,
         }));
 
-
     const renderItem = ({ item }) => (
         <TouchableOpacity
             style={styles.card}
             activeOpacity={0.8}
-            onPress={() => goToRoute?.(item)}
+            onPress={() =>
+                navigation.navigate('RoutePlanner', {
+                    trip: item,
+                })
+            }
         >
 
             <View style={styles.row}>

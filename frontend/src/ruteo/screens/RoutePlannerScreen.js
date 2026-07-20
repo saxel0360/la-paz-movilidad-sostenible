@@ -12,6 +12,7 @@ import {
     Platform,
     StatusBar,
 } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import MapView, { Polyline, Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { useWalkingRoute, useDrivingRoute } from '../hooks/useOSRM';
 import { SearchBar } from '../components/SearchBar';
@@ -30,7 +31,7 @@ import { useTripSimulation } from '../hooks/useTripSimulation';
 import { useActiveEventMonitor } from '../hooks/useActiveEventMonitor';
 import EventMonitorPanel from '../components/EventMonitorPanel';
 import styles from '../styles/RoutePlannerStyles';
-
+import IncidentModal from '../components/IncidentModal';
 
 
 const { height, width } = Dimensions.get('window');
@@ -92,7 +93,10 @@ const createContinuousRoute = (tramos) => {
     return { segments, allCoordinates };
 };
 
-export default function RoutePlannerScreen() {
+//export default function RoutePlannerScreen() {
+export default function RoutePlannerScreen({ navigation }) {
+
+    const navigationRoute = useRoute();
     const mapRef = useRef(null);
     const [origin, setOrigin] = useState({
         latitude: -16.4958,
@@ -110,6 +114,8 @@ export default function RoutePlannerScreen() {
     const [selectedRouteId, setSelectedRouteId] = useState('ruta_44');
     const [showRoutes, setShowRoutes] = useState(false);
     const [showTripControls, setShowTripControls] = useState(false);
+
+    const [showIncidentModal, setShowIncidentModal] = useState(false);
 
     // Estados para los segmentos
     const [walkRoute1, setWalkRoute1] = useState(null);
@@ -171,6 +177,18 @@ export default function RoutePlannerScreen() {
         }
         console.log('🚀 Iniciando viaje...');
         startTrip();
+    };
+
+    const handleReportIncident = () => {
+        setShowIncidentModal(true);
+    };
+
+    const handleSelectIncident = (incident) => {
+
+        console.log("Incidente:", incident);
+
+        setShowIncidentModal(false);
+
     };
 
     // ============================================
@@ -242,6 +260,7 @@ const {
         }
     }, [blockedRoute]);
 
+
     // ============================================
     // SELECCIÓN DE CASO DE PRUEBA
     // ============================================
@@ -272,6 +291,14 @@ const {
             calculateMultimodalRoute(waypoints);
         }, 300);
     };
+    //Añadido por Aracelii
+    useEffect(() => {
+        if (navigationRoute?.params?.trip) {
+            handleTestCaseSelect(
+                navigationRoute.params.trip
+            );
+        }
+    }, [navigationRoute?.params?.trip]);
 
     // ============================================
     // CALCULAR RUTA COMPLEJA - SIN CAMINATAS EXTRAS
@@ -1050,15 +1077,25 @@ const {
                     
                 </MapView>
 
+
+                {/* Botón flotante de incidente */}
+                {isTripActive && (
+                    <TouchableOpacity
+                        style={styles.floatingIncidentButton}
+                        onPress={handleReportIncident}
+                    >
+                        <Text style={styles.floatingIncidentText}>⚠</Text>
+                    </TouchableOpacity>
+                )}
+
                 {/* Controles superiores */}
                 <View style={styles.topControls}>
-                    {/* CASOS DE PRUEBA 
                     <TestCaseSelector
                         onSelect={handleTestCaseSelect}
                         selectedCase={selectedTestCase}
                     />
-                    {/* fin de CASOS DE PRUEBA */}
 
+                    {/*
                     <View style={styles.searchContainer}>
                         <SearchBar
                             placeholder="Origen..."
@@ -1073,6 +1110,7 @@ const {
                             }}
                         />
                     </View>
+                    
                     <View style={styles.searchContainer}>
                         <SearchBar
                             placeholder="Destino..."
@@ -1087,6 +1125,7 @@ const {
                             }}
                         />
                     </View>
+                    */}
                 </View>
 
                 {/* Panel inferior */}
@@ -1118,8 +1157,6 @@ const {
         clearActiveEvent={clearActiveEvent}
     />
 )}
-
-                    {/* CASOS DE PRUEBA 
                     {route && !isLoading && (
                         <RouteInfoPanel
                             route={route}
@@ -1148,9 +1185,14 @@ const {
                             destination={destination}
                         />
                     )}
-                    {/* fin de CASOS DE PRUEBA */}
                 </View>
             </View>
+
+            <IncidentModal
+                visible={showIncidentModal}
+                onClose={() => setShowIncidentModal(false)}
+                onSelectIncident={handleSelectIncident}
+            />
         </SafeAreaView>
     );
 }

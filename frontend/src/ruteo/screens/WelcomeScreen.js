@@ -24,7 +24,7 @@ export default function WelcomeScreen({ navigation }) {
 
     Animated.timing(progress, {
       toValue: 1,
-      duration: 5000,
+      duration: 4000,
       useNativeDriver: false,
     }).start(() => {
       navigation.replace("DestinationSearch");

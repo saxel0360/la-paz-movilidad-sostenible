@@ -7,6 +7,7 @@ export const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
         backgroundColor: COLORS.WHITE,
+        paddingTop: 40,
     },
     container: {
         flex: 1,
@@ -461,6 +462,101 @@ export const styles = StyleSheet.create({
         color: COLORS.WHITE,
         fontSize: 12,
         fontWeight: '600',
+    },
+
+    floatingIncidentButton: {
+        position: 'absolute',
+        top: 180,
+        right: 20,
+
+        width: 54,
+        height: 54,
+        borderRadius: 35,
+
+        backgroundColor: '#1976D2',
+
+        justifyContent: 'center',
+        alignItems: 'center',
+
+        elevation: 6,
+        shadowColor: '#000',
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+
+        zIndex: 999,
+    },
+
+    floatingIncidentText: {
+        color: '#fff',
+        fontSize: 28,
+        fontWeight: 'bold',
+    },
+
+    incidentOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.35)',
+        justifyContent: 'flex-end',
+    },
+
+    incidentModal: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        padding: 20,
+        maxHeight: '70%',
+    },
+
+    incidentHandle: {
+        width: 45,
+        height: 5,
+        backgroundColor: '#CCC',
+        alignSelf: 'center',
+        borderRadius: 10,
+        marginBottom: 15,
+    },
+
+    incidentTitle: {
+        fontSize: 22,
+        fontWeight: 'bold',
+    },
+
+    incidentSubtitle: {
+        color: '#777',
+        marginBottom: 20,
+    },
+
+    incidentItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#EFEFEF',
+    },
+
+    incidentIcon: {
+        fontSize: 28,
+        width: 50,
+    },
+
+    incidentItemText: {
+        fontSize: 17,
+    },
+
+    closeIncidentButton: {
+        marginTop: 20,
+        padding: 14,
+        borderRadius: 12,
+        backgroundColor: '#1976D2',
+        alignItems: 'center',
+    },
+
+    closeIncidentText: {
+        color: '#FFF',
+        fontWeight: 'bold',
     },
 });
 

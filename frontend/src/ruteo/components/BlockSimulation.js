@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import styles from '../styles/RoutePlannerStyles';
+import { COLORS } from '../../constants/colors';
 
 export const BlockSimulation = ({
     isBlocked,

@@ -3,7 +3,7 @@ export const COLORS = {
     // Modos de transporte
     WALK: '#34C759',
     TELEFERICO: '#FF3B30',
-    PUMKATARI: '#007AFF',
+    PUMAKATARI: '#007AFF',
     MINIBUS: '#FF9500',
     TRUFI: '#AF52DE',
     MICRO: '#FF2D55',
