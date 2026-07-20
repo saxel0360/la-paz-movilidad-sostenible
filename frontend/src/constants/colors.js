@@ -28,6 +28,9 @@ export const COLORS = {
     GRAY_700: '#374151',
     GRAY_900: '#111827',
 
+    //BIENVENIDA
+    SLOGAN: "#01104a",
+
     // Azul del Illimani
     ANDEAN_BLUE: '#2F6690',
     ANDEAN_BLUE_LIGHT: '#DCECF7',

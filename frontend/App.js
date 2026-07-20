@@ -1,39 +1,27 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, SafeAreaView } from 'react-native';
-import { useState } from 'react';
-
-import DestinationSearchScreen from './src/ruteo/screens/DestinationSearch';
-import RoutePlannerScreen from './src/ruteo/screens/RoutePlannerScreen';
+import { useFonts,
+  Poppins_400Regular,
+  Poppins_500Medium,
+  Poppins_600SemiBold,
+  Poppins_700Bold,
+} from "@expo-google-fonts/poppins";
+import { StatusBar } from "expo-status-bar";
+import AppNavigator from "./src/navigation/AppNavigator";
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    Poppins_400Regular,
+    Poppins_500Medium,
+    Poppins_600SemiBold,
+    Poppins_700Bold,
+  });
 
-  const [screen, setScreen] = useState('search');
-
+  if (!fontsLoaded) {
+    return null;
+  }
   return (
-    <SafeAreaView style={styles.container}>
-
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor="#FFFFFF"
-      />
-
-      {
-        screen === 'search'
-        ?
-        <DestinationSearchScreen 
-          goToRoute={() => setScreen('route')}
-        />
-        :
-        <RoutePlannerScreen />
-      }
-
-    </SafeAreaView>
+    <>
+      <StatusBar style="light" />
+      <AppNavigator />
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-});
