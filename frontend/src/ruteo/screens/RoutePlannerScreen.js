@@ -27,7 +27,11 @@ import { getPumakatariSegment } from '../../services/pumakatariRoutes';
 import { useBlockSimulation } from '../hooks/useBlockSimulation';
 import { routeRecalculator } from '../../services/routeRecalculator';
 import { useTripSimulation } from '../hooks/useTripSimulation';
+import { useActiveEventMonitor } from '../hooks/useActiveEventMonitor';
+import EventMonitorPanel from '../components/EventMonitorPanel';
 import styles from '../styles/RoutePlannerStyles';
+
+
 
 const { height, width } = Dimensions.get('window');
 
@@ -215,7 +219,21 @@ export default function RoutePlannerScreen() {
         stopBlockSimulation,
         BLOCK_POINTS,
     } = useBlockSimulation(route, handleRecalculate);
-
+const {
+    monitorEnabled,
+    setMonitorEnabled,
+    activeEvent,
+    eventHistory,
+    trafficEvents,
+    simulateEventById,
+    clearActiveEvent,
+} = useActiveEventMonitor({
+    route,
+    isTripActive,
+    tripProgress,
+    isBlocked,
+    startBlockSimulation,
+});
     // Efecto para actualizar la ruta cuando se recalcula
     useEffect(() => {
         if (blockedRoute) {
@@ -1008,6 +1026,28 @@ export default function RoutePlannerScreen() {
                             />
                         </Marker>
                     )}
+                    {activeEvent && (
+    <Marker
+        coordinate={{
+            latitude: activeEvent.blockPoint.lat,
+            longitude: activeEvent.blockPoint.lng,
+        }}
+        title={activeEvent.nombre}
+        description={activeEvent.descripcion}
+        anchor={{ x: 0.5, y: 0.5 }}
+        zIndex={120}
+    >
+        <View style={styles.markerContainer}>
+            <View style={[styles.markerPin, { backgroundColor: activeEvent.color }]}>
+                <Text style={styles.markerEmojiText}>{activeEvent.icono}</Text>
+            </View>
+            <View style={styles.markerLabelContainer}>
+                <Text style={styles.markerLabelText}>{activeEvent.tipo}</Text>
+            </View>
+        </View>
+    </Marker>
+)}
+                    
                 </MapView>
 
                 {/* Controles superiores */}
@@ -1067,6 +1107,17 @@ export default function RoutePlannerScreen() {
                             </Text>
                         </View>
                     )}
+                    {route && !isLoading && (
+    <EventMonitorPanel
+        monitorEnabled={monitorEnabled}
+        setMonitorEnabled={setMonitorEnabled}
+        activeEvent={activeEvent}
+        trafficEvents={trafficEvents}
+        eventHistory={eventHistory}
+        simulateEventById={simulateEventById}
+        clearActiveEvent={clearActiveEvent}
+    />
+)}
 
                     {/* CASOS DE PRUEBA 
                     {route && !isLoading && (
