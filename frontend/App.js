@@ -1,19 +1,12 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, SafeAreaView } from 'react-native';
-import RoutePlannerScreen from './src/ruteo/screens/RoutePlannerScreen';
+import React from "react";
 
-export default function App() {
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
-      <RoutePlannerScreen />
-    </SafeAreaView>
+import AppNavigator from "./src/navigation/AppNavigator";
+
+
+export default function App(){
+
+  return(
+    <AppNavigator/>
   );
-}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-});
+}
