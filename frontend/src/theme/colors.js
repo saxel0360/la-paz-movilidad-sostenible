@@ -1,20 +1,21 @@
 const Colors = {
-  primary: "#1565C0",      // Azul
-  secondary: "#43A047",    // Verde
-  warning: "#FB8C00",      // Naranja
-  error: "#E53935",        // Rojo
+  primary: "#2F6690",      // Azul del Illimani
+  secondary: "#C97A4A",    // Terracota andina
+  accent: "#6D9F71",       // Verde de los valles
+  warning: "#F59E0B",
+  error: "#EF4444",
 
-  background: "#F5F5F5",
+  background: "#F7F9FC",
 
   white: "#FFFFFF",
 
-  black: "#212121",
+  black: "#111827",
 
-  text: "#424242",
+  text: "#213547",
 
-  textLight: "#757575",
+  textLight: "#6B7280",
 
-  border: "#E0E0E0",
+  border: "#E4EAF1",
 };
 
 export default Colors;

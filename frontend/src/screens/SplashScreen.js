@@ -1,216 +1,180 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import {
   View,
   Image,
   Text,
   StyleSheet,
-  Animated
+  Animated,
+  ImageBackground,
 } from "react-native";
 
 import colors from "../theme/colors";
 
+const LOADING_MESSAGES = [
+  "Iniciando la aplicación...",
+  "Preparando el mapa...",
+  "Cargando información del transporte...",
+  "Todo listo.",
+];
 
 export default function SplashScreen({ navigation }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.7)).current;
+  const progress = useRef(new Animated.Value(0)).current;
 
+  const [loadingText, setLoadingText] = useState(LOADING_MESSAGES[0]);
 
-  const fadeAnim = useRef(
-    new Animated.Value(0)
-  ).current;
-
-
-  const scaleAnim = useRef(
-    new Animated.Value(0.7)
-  ).current;
-
-
-
-  useEffect(()=>{
-
-
+  useEffect(() => {
     Animated.parallel([
-
-      Animated.timing(fadeAnim,{
-        toValue:1,
-        duration:1200,
-        useNativeDriver:true
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
       }),
 
-
-      Animated.spring(scaleAnim,{
-        toValue:1,
-        speed:2,
-        bounciness:8,
-        useNativeDriver:true
-      })
-
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        speed: 2,
+        bounciness: 8,
+        useNativeDriver: true,
+      }),
     ]).start();
 
+    const textTimers = [
+      setTimeout(() => setLoadingText(LOADING_MESSAGES[1]), 700),
+      setTimeout(() => setLoadingText(LOADING_MESSAGES[2]), 1500),
+      setTimeout(() => setLoadingText(LOADING_MESSAGES[3]), 2300),
+    ];
 
-
-    const timer = setTimeout(()=>{
-
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 3500,
+      useNativeDriver: false,
+    }).start(() => {
       navigation.replace("Home");
+    });
 
-    },3500);
+    return () => textTimers.forEach(clearTimeout);
+  }, []);
 
-
-
-    return ()=>clearTimeout(timer);
-
-
-  },[]);
-
-
+  const barWidth = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
 
   return (
+    <ImageBackground
+      source={require("../../assets/fondoH.webp")}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      <View style={styles.overlay}>
+        <Animated.View
+          style={{
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }],
+          }}
+        >
+          <Image
+            source={require("../../assets/logoF.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </Animated.View>
 
-    <View style={styles.container}>
-
-
-      <Animated.View
-        style={{
-          opacity:fadeAnim,
-          transform:[
+        <Animated.Text
+          style={[
+            styles.title,
             {
-              scale:scaleAnim
-            }
-          ]
-        }}
-      >
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          ¿Qué Tomo?
+        </Animated.Text>
 
-        <Image
-          source={require("../../assets/logo.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        <Animated.Text
+          style={[
+            styles.subtitle,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          Tu guía inteligente para moverte por La Paz
+        </Animated.Text>
 
-      </Animated.View>
+        <View style={styles.loader}>
+          <Animated.View
+            style={[
+              styles.loaderFill,
+              {
+                width: barWidth,
+              },
+            ]}
+          />
+        </View>
 
-
-
-      <Animated.Text
-        style={[
-          styles.title,
-          {
-            opacity:fadeAnim
-          }
-        ]}
-      >
-        Movilidad La Paz
-      </Animated.Text>
-
-
-
-      <Animated.Text
-        style={[
-          styles.subtitle,
-          {
-            opacity:fadeAnim
-          }
-        ]}
-      >
-        Tu ruta inteligente por la ciudad
-      </Animated.Text>
-
-
-
-      <View style={styles.loader}>
-        <View style={styles.dot}/>
+        <Text style={styles.loadingText}>{loadingText}</Text>
       </View>
-
-
-    </View>
-
+    </ImageBackground>
   );
-
 }
-
-
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+  },
 
-container:{
+  overlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.35)",
+    paddingHorizontal: 30,
+  },
 
- flex:1,
+  logo: {
+    width: 180,
+    height: 180,
+  },
 
- backgroundColor:colors.primary,
+  title: {
+    marginTop: 20,
+    fontSize: 32,
+    fontWeight: "bold",
+    color: colors.white,
+    textAlign: "center",
+  },
 
- justifyContent:"center",
+  subtitle: {
+    marginTop: 8,
+    fontSize: 16,
+    color: colors.white,
+    textAlign: "center",
+    opacity: 0.95,
+  },
 
- alignItems:"center"
+  loader: {
+    marginTop: 45,
+    width: 220,
+    height: 7,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    borderRadius: 10,
+    overflow: "hidden",
+  },
 
-},
+  loaderFill: {
+    height: "100%",
+    backgroundColor: colors.secondary,
+    borderRadius: 10,
+  },
 
-
-
-logo:{
-
- width:180,
-
- height:180
-
-},
-
-
-
-title:{
-
- marginTop:25,
-
- fontSize:28,
-
- fontWeight:"700",
-
- color:colors.white
-
-},
-
-
-
-subtitle:{
-
- marginTop:8,
-
- fontSize:16,
-
- color:colors.white,
-
- opacity:0.85
-
-},
-
-
-
-loader:{
-
- marginTop:45,
-
- width:60,
-
- height:6,
-
- backgroundColor:"rgba(255,255,255,0.3)",
-
- borderRadius:10,
-
- overflow:"hidden"
-
-},
-
-
-
-dot:{
-
- width:20,
-
- height:6,
-
- backgroundColor:colors.secondary,
-
- borderRadius:10
-
-}
-
-
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: colors.white,
+    opacity: 0.9,
+  },
 });

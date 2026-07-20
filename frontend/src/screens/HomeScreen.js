@@ -15,55 +15,48 @@ import typography from "../theme/typography";
 import spacing from "../theme/spacing";
 import shadows from "../theme/shadows";
 
-// ============================================
-// MENÚ PRINCIPAL
-// Cada entrada define a qué pantalla navega.
-// "ready: true"  -> ya está construida por el equipo (navega directo)
-// "ready: false" -> aún no existe; muestra aviso "Próximamente"
-// ============================================
-const MENU_ITEMS = [
+import RecentTrips from "../ruteo/components/RecentTrips";
+
+const QUICK_LINKS = [
   {
-    key: "rutas",
-    icon: "🗺️",
-    title: "Planificar Ruta",
-    subtitle: "Rutas alternativas y bloqueos en tiempo real",
-    screen: "RoutePlanner",
+    key: "transporte",
+    icon: "🚌",
+    title: "Medios",
+    screen: "TransportModes",
+    ready: true,
+  },
+  {
+    key: "dashboard",
+    icon: "📊",
+    title: "Dashboard",
+    screen: "Dashboard",
     ready: true,
   },
   {
     key: "paradas",
     icon: "📍",
-    title: "Paradas Inteligentes",
-    subtitle: "Encuentra la parada más cercana",
-    screen: "Paradas",
-    ready: false,
-  },
-  {
-    key: "dashboard",
-    icon: "📊",
-    title: "Dashboard Municipal",
-    subtitle: "Estadísticas de bloqueos y transporte",
-    screen: "Dashboard",
-    ready: false,
-  },
-  {
-    key: "transporte",
-    icon: "🚌",
-    title: "Medios de Transporte Disponibles",
-    subtitle: "Minibús, Teleférico, PumaKatari y más",
-    screen: "TransportModes",
+    title: "Paradas",
+    screen: "SmartStops",
     ready: true,
+  },
+  {
+    key: "incidente",
+    icon: "⚠️",
+    title: "Reportar",
+    screen: "ReportarIncidente",
+    ready: false,
   },
 ];
 
 export default function HomeScreen() {
   const navigation = useNavigation();
 
-  const handlePress = (item) => {
+  const goToSearch = () => navigation.navigate("DestinationSearch");
+
+  const handleQuickLink = (item) => {
     if (item.ready) {
       navigation.navigate(item.screen);
     } else {
-      // Placeholder amigable mientras el resto del equipo construye la pantalla
       navigation.navigate("ComingSoon", { title: item.title });
     }
   };
@@ -74,50 +67,49 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Logo */}
-      <Image
-        source={require("../../assets/logo.png")}
-        style={styles.logo}
-        resizeMode="contain"
-      />
 
-      {/* Título */}
-      <Text style={styles.title}>¿Qué Tomo?</Text>
+      {/* Buscador — protagonista de la pantalla.*/}
+      <Text style={styles.searchLabel}>¿A dónde quieres ir?</Text>
 
-      {/* Eslogan */}
-      <Text style={styles.subtitle}>
-        Para moverte en La Paz,{"\n"}
-        no para irte de fiesta.
-      </Text>
+      <TouchableOpacity
+        style={styles.searchBox}
+        activeOpacity={0.8}
+        onPress={goToSearch}
+      >
+        <Text style={styles.searchIcon}>🔍</Text>
+        <Text style={styles.searchPlaceholder}>Buscar destino</Text>
+      </TouchableOpacity>
 
-      {/* Menú principal */}
-      <Text style={styles.sectionTitle}>Menú</Text>
+      <TouchableOpacity
+        style={styles.locationLink}
+        activeOpacity={0.7}
+        onPress={goToSearch}
+      >
+        <Text style={styles.locationText}>📍 Usar mi ubicación</Text>
+      </TouchableOpacity>
 
-      <View style={styles.menuContainer}>
-        {MENU_ITEMS.map((item) => (
+      {/* Accesos rápidos */}
+      <Text style={styles.sectionTitle}>Accesos rápidos</Text>
+
+      <View style={styles.quickRow}>
+        {QUICK_LINKS.map((item) => (
           <TouchableOpacity
             key={item.key}
-            style={styles.menuCard}
+            style={styles.quickItem}
             activeOpacity={0.8}
-            onPress={() => handlePress(item)}
+            onPress={() => handleQuickLink(item)}
           >
-            <View style={styles.menuIconWrapper}>
-              <Text style={styles.menuIcon}>{item.icon}</Text>
+            <View style={styles.quickIconWrapper}>
+              <Text style={styles.quickIcon}>{item.icon}</Text>
             </View>
-
-            <View style={styles.menuTextWrapper}>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-              <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-            </View>
-
-            {!item.ready && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>Próximamente</Text>
-              </View>
-            )}
+            <Text style={styles.quickLabel}>{item.title}</Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Viajes recientes (componente compartido con el módulo de ruteo) */}
+      <Text style={styles.sectionTitle}>Viajes recientes</Text>
+      <RecentTrips scrollEnabled={false} />
     </ScrollView>
   );
 }
@@ -134,11 +126,11 @@ const styles = StyleSheet.create({
   },
 
   logo: {
-    width: 140,
-    height: 140,
+    width: 110,
+    height: 110,
     alignSelf: "center",
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
   },
 
   title: {
@@ -146,14 +138,45 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textAlign: "center",
     color: colors.primary,
+    marginBottom: spacing.lg,
   },
 
-  subtitle: {
+  searchLabel: {
+    fontSize: typography.subheading,
+    fontWeight: "700",
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.white,
+    borderRadius: 16,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    ...shadows.card,
+  },
+
+  searchIcon: {
+    fontSize: 18,
+    marginRight: spacing.sm,
+  },
+
+  searchPlaceholder: {
     fontSize: typography.body,
-    textAlign: "center",
     color: colors.textLight,
+  },
+
+  locationLink: {
     marginTop: spacing.sm,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+
+  locationText: {
+    fontSize: typography.caption,
+    color: colors.primary,
+    fontWeight: "600",
   },
 
   sectionTitle: {
@@ -161,61 +184,39 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
     marginBottom: spacing.md,
+    marginTop: spacing.sm,
   },
 
-  menuContainer: {
-    gap: spacing.md,
-  },
-
-  menuCard: {
+  quickRow: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: spacing.xl,
+  },
+
+  quickItem: {
     alignItems: "center",
+    width: "23%",
+  },
+
+  quickIconWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.white,
-    borderRadius: 18,
-    padding: spacing.md,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
     ...shadows.card,
   },
 
-  menuIconWrapper: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: spacing.md,
+  quickIcon: {
+    fontSize: 24,
   },
 
-  menuIcon: {
-    fontSize: 26,
-  },
-
-  menuTextWrapper: {
-    flex: 1,
-  },
-
-  menuTitle: {
-    fontSize: typography.body,
-    fontWeight: "700",
-    color: colors.text,
-  },
-
-  menuSubtitle: {
+  quickLabel: {
     fontSize: typography.small,
-    color: colors.textLight,
-    marginTop: 2,
-  },
-
-  badge: {
-    backgroundColor: colors.border,
-    borderRadius: 10,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-
-  badgeText: {
-    fontSize: 10,
+    color: colors.text,
     fontWeight: "600",
-    color: colors.textLight,
+    textAlign: "center",
   },
 });
