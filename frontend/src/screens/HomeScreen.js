@@ -46,6 +46,13 @@ const QUICK_LINKS = [
     screen: "ReportarIncidente",
     ready: false,
   },
+  {
+  key: "motor-eventos",
+  icon: "🧠",
+  title: "Motor",
+  screen: "EventEngineDemo",
+  ready: true,
+},
 ];
 
 export default function HomeScreen() {
